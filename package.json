@@ -1,0 +1,10 @@
+{
+  "name": "mwo-boutique-finder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MWO Boutique Finder: find and rank specialty boutiques, then track wholesale outreach.",
+  "dependencies": {
+    "@netlify/blobs": "11.1.4"
+  }
+}

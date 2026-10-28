@@ -1,0 +1,14 @@
+[build]
+  publish = "public"
+  command = "echo 'No build step needed'"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Keep search engines from indexing the tool.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
