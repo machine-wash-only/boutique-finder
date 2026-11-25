@@ -89,9 +89,21 @@ To use something like `finder.machinewashonly.com`:
 4. Wait up to an hour. Netlify adds HTTPS automatically.
 5. On your Squarespace site, add a button or menu link that points to the new address.
 
+## Managing testers and clients (no redeploy)
+
+Sign in with your admin code and open the **Manage access** tab.
+
+- **Create a code:** type the brand name, and optionally who it's for, then click **Create code**. Copy the code or the ready-made invite message and send it.
+- **Same brand, several people:** give each person their own code under the same brand name. They'll share one pipeline.
+- **Turn off / turn on:** turning a code off signs that person out the next time they use the tool. Their pipeline is kept.
+- **Delete:** only available once a code is off. The pipeline is still kept.
+- **Usage:** each row shows searches today and all time, plus when the code was last used.
+
+Codes in the `ACCESS_CODES` setting, including your admin code, still work and are listed as "Netlify". Keep your admin code there so you can never lock yourself out.
+
 ## Changing things later
 
-- **Add or remove a client:** edit `ACCESS_CODES`, then trigger a redeploy.
+- **Add or remove a client:** use the Manage access tab (above), or edit `ACCESS_CODES` and trigger a redeploy.
 - **Change the look or wording:** edit `public/index.html` on GitHub with the pencil icon. Netlify redeploys automatically.
 - **Change what Claude is asked:** the prompts are in `netlify/lib/core.js`, in `buildSearch` and `buildDraft`.
 

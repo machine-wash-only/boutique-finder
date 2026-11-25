@@ -11,7 +11,7 @@ const env = k => Netlify.env.get(k);
 export default async (req) => {
   if (req.method !== "POST") return json({ message: "Use POST." }, 405);
 
-  const user = authenticate(req, env);
+  const user = await authenticate(req, env, getStore({ name: "access", consistency: "strong" }));
   if (!user) return json({ code: "bad_code", message: "That access code isn't recognized. Sign in again." }, 401);
 
   const key = env("ANTHROPIC_API_KEY");

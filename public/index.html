@@ -204,6 +204,30 @@ footer{border-top:1px solid var(--ink);padding-top:12px;display:flex;justify-con
 .progress .label{color:var(--ink)}
 .progress ol{margin:0;padding-left:20px;font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
 .progress .stopbtn{align-self:flex-start}
+.newcode{background:var(--paper);border:1px solid var(--ink);padding:18px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:14px;align-items:start}
+.newcode .go{margin-top:22px;white-space:nowrap;gap:16px}
+@media (max-width:760px){.newcode{grid-template-columns:minmax(0,1fr)}.newcode .go{margin-top:0}}
+.issued{border:1px solid var(--ink);background:var(--acid);color:var(--acid-ink);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.issued .big{font-family:var(--mono);font-size:24px;letter-spacing:.04em;font-weight:500;word-break:break-all}
+.issued .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.issued .chipbtn{border-color:var(--acid-ink);color:var(--acid-ink)}
+.issued pre{margin:0;white-space:pre-wrap;font-family:var(--body);font-size:14px;background:rgba(255,255,255,.35);padding:10px 12px;border:1px solid rgba(0,0,0,.15)}
+.atable-wrap{border:1px solid var(--ink);background:var(--paper);overflow-x:auto}
+table.atable{border-collapse:collapse;width:100%;font-size:14px;min-width:760px}
+.atable th,.atable td{padding:10px 12px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:middle}
+.atable th{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:500;color:var(--muted)}
+.atable tr:last-child td{border-bottom:0}
+.atable td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.atable th.num{text-align:right}
+.atable .code{font-family:var(--mono);font-size:13px}
+.atable .sub{color:var(--muted);font-size:12px}
+.atable tr.off td{color:var(--muted)}
+.pill{font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid var(--ink);white-space:nowrap}
+.pill.on{background:var(--ink);color:var(--bone)}
+.pill.off{border-style:dashed;color:var(--muted);border-color:var(--muted)}
+.pill.env{border-color:var(--cobalt);color:var(--cobalt)}
+.rowacts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.rowacts .chipbtn.danger{border-color:var(--warn);color:var(--warn)}
 .spin{display:inline-block;width:8px;height:8px;background:var(--cobalt);border-radius:50%;animation:pulse 1s ease-in-out infinite;margin-right:8px;vertical-align:middle}
 @keyframes pulse{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
@@ -237,6 +261,7 @@ footer{border-top:1px solid var(--ink);padding-top:12px;display:flex;justify-con
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-find" aria-selected="true" data-view="find">Find stores</button>
       <button class="tab" role="tab" id="tab-pipe" aria-selected="false" data-view="pipeline">Pipeline <span class="badge" id="dueBadge" hidden></span></button>
+      <button class="tab" role="tab" id="tab-access" aria-selected="false" data-view="access" hidden>Manage access</button>
     </div>
     <div class="who"><span>Signed in as <b id="whoName"></b></span><span id="whoUsage"></span><button class="linkbtn" id="signOut" type="button">Sign out</button></div>
   </div>
@@ -315,6 +340,22 @@ footer{border-top:1px solid var(--ink);padding-top:12px;display:flex;justify-con
       </form>
     </details>
     <div id="plist" class="stack"></div>
+  </section>
+
+  <!-- MANAGE ACCESS (admin only) -->
+  <section id="view-access" class="stack" hidden>
+    <div class="phead">
+      <div><span class="label">Admin · testers and clients</span><h2>Who can sign in</h2></div>
+      <div class="tools"><button class="chipbtn" id="arefresh" type="button">Refresh</button></div>
+    </div>
+    <form class="newcode" id="codeForm" autocomplete="off">
+      <div class="field"><label for="cBrand">Brand</label><input id="cBrand" required placeholder="e.g. Little Field Co."><small>Also their pipeline. Same brand name = shared pipeline.</small></div>
+      <div class="field"><label for="cNote">Who it's for (optional)</label><input id="cNote" placeholder="e.g. Dana, founder · tester"></div>
+      <button class="go" type="submit"><span>Create code</span><span aria-hidden="true">→</span></button>
+    </form>
+    <div id="newCodeBox"></div>
+    <div class="status" id="astatus"></div>
+    <div id="alist"></div>
   </section>
   </div>
 
@@ -454,16 +495,108 @@ function neighborHits(s, neighbors){
 }
 
 /* ---------- views ---------- */
+function viewFromHash(){ const h=location.hash.slice(1); return h==="pipeline" ? "pipeline" : (h==="access" && me?.role==="admin") ? "access" : "find"; }
 function showView(v){
-  const pipeOn = v==="pipeline";
-  $("#view-find").hidden = pipeOn; $("#view-pipe").hidden = !pipeOn;
-  $("#tab-find").setAttribute("aria-selected", !pipeOn); $("#tab-pipe").setAttribute("aria-selected", pipeOn);
-  if(pipeOn && me) loadPipe();
+  if(v==="access" && me?.role!=="admin") v="find";
+  $("#view-find").hidden = v!=="find"; $("#view-pipe").hidden = v!=="pipeline"; $("#view-access").hidden = v!=="access";
+  $("#tab-find").setAttribute("aria-selected", v==="find"); $("#tab-pipe").setAttribute("aria-selected", v==="pipeline"); $("#tab-access").setAttribute("aria-selected", v==="access");
+  if(v==="pipeline" && me) loadPipe();
+  if(v==="access" && me) loadCodes();
 }
 document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
-  const v=t.dataset.view; history.replaceState(null,"", v==="pipeline" ? "#pipeline" : "#find"); showView(v);
+  const v=t.dataset.view; history.replaceState(null,"", "#"+v); showView(v);
 }));
-window.addEventListener("hashchange",()=>showView(location.hash==="#pipeline"?"pipeline":"find"));
+window.addEventListener("hashchange",()=>showView(viewFromHash()));
+
+/* ---------- manage access (admin) ---------- */
+let codesData = null;
+const astatus = (m,e)=>setStatus($("#astatus"),m,e);
+const fmtDay = s => { if(!s) return "Never"; const dt=new Date(s); if(isNaN(dt)) return "—"; return ymd(dt)===today() ? "Today" : dt.toLocaleDateString(undefined,{month:"short",day:"numeric"}); };
+
+async function loadCodes(){
+  try{ const r = await api("/api/admin/codes"); codesData = await r.json(); renderCodes(); }
+  catch(e){ if(e.code!=="bad_code") astatus(e.message, true); }
+}
+function renderCodes(){
+  const box=$("#alist");
+  if(!codesData){ box.innerHTML = `<div class="empty">Loading…</div>`; return; }
+  const {codes, netlify, stats, limits:lim} = codesData;
+  const st = n => stats[n] || {today:0,total:0};
+  const rows = codes.map(c=>`<tr class="${c.active?"":"off"}" data-id="${esc(c.id)}">
+      <td><b>${esc(c.brand||c.workspace)}</b>${c.note?`<div class="sub">${esc(c.note)}</div>`:""}</td>
+      <td class="code">${esc(c.code)}</td>
+      <td><span class="pill ${c.active?"on":"off"}">${c.active?"Active":"Off"}</span></td>
+      <td class="num">${st(c.workspace).today} / ${lim.search}</td>
+      <td class="num">${st(c.workspace).total}</td>
+      <td>${esc(fmtDay(c.lastUsed))}</td>
+      <td><div class="rowacts">
+        <button class="chipbtn" type="button" data-act="copy">Copy</button>
+        <button class="chipbtn" type="button" data-act="toggle">${c.active?"Turn off":"Turn on"}</button>
+        ${c.active?"":`<button class="chipbtn danger" type="button" data-act="delete">Delete</button>`}
+      </div></td></tr>`).join("");
+  const envRows = netlify.map(u=>`<tr>
+      <td><b>${esc(u.workspace)}</b><div class="sub">${u.role==="admin"?"Admin · sees every pipeline":"Set in Netlify"}</div></td>
+      <td class="sub">Kept in Netlify settings</td>
+      <td><span class="pill env">Netlify</span></td>
+      <td class="num">${st(u.workspace).today} / ${lim.search}</td>
+      <td class="num">${st(u.workspace).total}</td>
+      <td class="sub">—</td><td></td></tr>`).join("");
+  box.innerHTML = `<div class="atable-wrap"><table class="atable">
+    <thead><tr><th>Brand</th><th>Code</th><th>Status</th><th class="num">Searches today</th><th class="num">All-time</th><th>Last signed in</th><th></th></tr></thead>
+    <tbody>${rows}${envRows}</tbody></table></div>
+    ${codes.length?"":`<p class="fine" style="margin-top:10px">No tester codes yet. Create one above.</p>`}
+    <p class="fine" style="margin-top:10px">Turning a code off signs that person out the next time they use the tool. Their pipeline is kept, so turning it back on restores everything. Codes set in Netlify are managed there.</p>`;
+}
+async function copyText(t, btn){
+  try{ await navigator.clipboard.writeText(t); if(btn){ btn.textContent="Copied"; setTimeout(()=>btn.textContent="Copy",1500);} }
+  catch(e){ if(btn){ btn.textContent="Select it"; setTimeout(()=>btn.textContent="Copy",1500);} }
+}
+function inviteText(entry){
+  return `Hi! Here's your access to Boutique Finder.
+
+Go to: ${location.origin}
+Access code: ${entry.code}
+
+You'll stay signed in on that device. You get ${codesData?.limits?.search ?? 25} store searches a day, and your store pipeline is private to your brand. Let me know what works and what doesn't.`;
+}
+$("#codeForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const brand=$("#cBrand").value.trim(); if(!brand) return;
+  astatus("Creating…");
+  try{
+    const r = await api("/api/admin/codes",{method:"POST", body:JSON.stringify({brand, note:$("#cNote").value.trim()})});
+    const {entry, shared} = await r.json();
+    $("#cBrand").value=""; $("#cNote").value=""; astatus("");
+    await loadCodes();
+    const msg = inviteText(entry);
+    $("#newCodeBox").innerHTML = `<div class="issued">
+      <span class="label" style="color:inherit">New code for ${esc(entry.brand)}${shared?" · shares a pipeline with this brand's other codes":""}</span>
+      <div class="big">${esc(entry.code)}</div>
+      <div class="row"><button class="chipbtn" type="button" id="cpCode">Copy</button><button class="chipbtn" type="button" id="cpMsg">Copy invite message</button><button class="chipbtn" type="button" id="cpClose">Done</button></div>
+      <pre>${esc(msg)}</pre></div>`;
+    $("#cpCode").onclick = ev => copyText(entry.code, ev.currentTarget);
+    $("#cpMsg").onclick = ev => { copyText(msg, null); ev.currentTarget.textContent="Copied"; };
+    $("#cpClose").onclick = () => { $("#newCodeBox").innerHTML=""; };
+  }catch(err){ if(err.code!=="bad_code") astatus(err.message, true); }
+});
+$("#arefresh").addEventListener("click", ()=>{ astatus(""); loadCodes(); });
+$("#alist").addEventListener("click", async e=>{
+  const b=e.target.closest("[data-act]"); if(!b) return;
+  const tr=b.closest("tr"); const id=tr?.dataset.id; const c=codesData?.codes.find(x=>x.id===id); if(!c) return;
+  const act=b.dataset.act;
+  if(act==="copy") return copyText(c.code, b);
+  if(act==="delete" && !b.dataset.armed){
+    b.dataset.armed="1"; b.textContent="Confirm delete";
+    setTimeout(()=>{ if(b.isConnected){ delete b.dataset.armed; b.textContent="Delete"; } },3500);
+    return;
+  }
+  b.disabled=true;
+  try{
+    if(act==="toggle"){ await api(`/api/admin/codes/${encodeURIComponent(id)}`,{method:"PATCH", body:JSON.stringify({active:!c.active})}); astatus(c.active?`${c.brand}'s code is off.`:`${c.brand}'s code is back on.`); }
+    if(act==="delete"){ await api(`/api/admin/codes/${encodeURIComponent(id)}`,{method:"DELETE"}); astatus(`Deleted ${c.brand}'s code. Their pipeline is kept.`); }
+    await loadCodes();
+  }catch(err){ b.disabled=false; if(err.code!=="bad_code") astatus(err.message, true); }
+});
 
 /* ---------- mode ---------- */
 $("#mode").addEventListener("click",e=>{
@@ -860,8 +993,8 @@ document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && me &&
 /* ---------- boot ---------- */
 function start(){
   showApp(); render();
-  if(me.role!=="admin"){ /* clients work on their own brand */ }
-  showView(location.hash==="#pipeline"?"pipeline":"find");
+  $("#tab-access").hidden = me.role!=="admin";
+  showView(viewFromHash());
   loadPipe();
 }
 (async ()=>{

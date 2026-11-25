@@ -23,10 +23,89 @@ export function parseCodes(raw) {
   return map;
 }
 
-export function authenticate(req, env) {
+/* Codes come from two places:
+   1. ACCESS_CODES in Netlify (your admin code lives here, so you can never lock yourself out)
+   2. Codes created on the Manage access page, kept in Netlify Blobs ("access" store, key "codes") */
+export async function authenticate(req, env, accessStore) {
   const code = (req.headers.get("x-access-code") || "").trim();
   if (!code) return null;
-  return parseCodes(env("ACCESS_CODES")).get(code) || null;
+  const fromEnv = parseCodes(env("ACCESS_CODES")).get(code);
+  if (fromEnv) return { ...fromEnv, source: "netlify" };
+  if (!accessStore) return null;
+  const data = await readCodes(accessStore);
+  const entry = data.codes.find(c => c.code === code);
+  if (!entry || !entry.active) return null;
+  return { name: entry.workspace, role: "client", source: "managed", id: entry.id };
+}
+
+/* ---------------- managed access codes ---------------- */
+const WORDS = ["cobalt","bone","ink","acid","plaster","selvedge","hemline","placket","gusset","bias","twill","poplin","rivet","seam","dart","yoke","cuff","grain","weft","warp","pleat","tuck","welt","bartack","overlock","binding","notch","godet"];
+
+export function makeCode() {
+  const r = new Uint32Array(3);
+  crypto.getRandomValues(r);
+  const a = WORDS[r[0] % WORDS.length];
+  let b = WORDS[r[1] % WORDS.length];
+  if (b === a) b = WORDS[(r[1] + 1) % WORDS.length];
+  return `${a}-${b}-${1000 + (r[2] % 9000)}`;
+}
+
+export async function readCodes(store) {
+  const d = await store.get("codes", { type: "json" });
+  return { codes: Array.isArray(d?.codes) ? d.codes : [] };
+}
+
+export async function writeCodes(store, data) {
+  await store.setJSON("codes", { codes: data.codes.slice(0, 500) });
+}
+
+export async function createCode(store, env, { brand, note }) {
+  const workspace = slug(brand);
+  if (!brand || workspace === "x") throw Object.assign(new Error("Enter a brand name."), { code: "bad_input" });
+  const data = await readCodes(store);
+  const envCodes = parseCodes(env("ACCESS_CODES"));
+  let code;
+  for (let i = 0; i < 20; i++) {
+    code = makeCode();
+    if (!envCodes.has(code) && !data.codes.some(c => c.code === code)) break;
+  }
+  const shared = data.codes.some(c => c.workspace === workspace) || [...envCodes.values()].some(u => u.name === workspace);
+  const r = new Uint32Array(2); crypto.getRandomValues(r);
+  const entry = {
+    id: r[0].toString(36) + r[1].toString(36),
+    code, workspace, brand: clip(brand, 80), note: clip(note, 120),
+    active: true, createdAt: new Date().toISOString(), lastUsed: "",
+  };
+  data.codes.unshift(entry);
+  await writeCodes(store, data);
+  return { entry, shared };
+}
+
+export async function updateCode(store, id, patch) {
+  const data = await readCodes(store);
+  const entry = data.codes.find(c => c.id === id);
+  if (!entry) return null;
+  if ("active" in patch) entry.active = !!patch.active;
+  if ("note" in patch) entry.note = clip(patch.note, 120);
+  await writeCodes(store, data);
+  return entry;
+}
+
+export async function deleteCode(store, id) {
+  const data = await readCodes(store);
+  const before = data.codes.length;
+  data.codes = data.codes.filter(c => c.id !== id);
+  if (data.codes.length !== before) await writeCodes(store, data);
+  return data.codes.length !== before;
+}
+
+export async function touchCode(store, id) {
+  const data = await readCodes(store);
+  const entry = data.codes.find(c => c.id === id);
+  // Store the exact time; write at most about once an hour per code.
+  if (!entry || (entry.lastUsed && Date.now() - Date.parse(entry.lastUsed) < 3600e3)) return;
+  entry.lastUsed = new Date().toISOString();
+  await writeCodes(store, data);
 }
 
 export function limits(env) {
@@ -45,6 +124,10 @@ export async function addUsage(store, user, kind) {
   const u = (await store.get(key, { type: "json" })) || {};
   u[kind] = (u[kind] || 0) + 1;
   await store.setJSON(key, u);
+  const tkey = `total/${user.name}`;
+  const t = (await store.get(tkey, { type: "json" })) || {};
+  t[kind] = (t[kind] || 0) + 1;
+  await store.setJSON(tkey, t);
   return u;
 }
 
